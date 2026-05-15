@@ -1,7 +1,7 @@
 -- // CONFIGURAÇÃO DE TEMPO REAL (MUNDIAL) // --
--- Expira em: 15/05/2026 às 19:23:00 (Horário de Brasília / UTC-3)
--- Timestamp Epoch correspondente: 1778883780
-local TEMPO_EXPIRACAO = 1778883780 
+-- Expira em: 15/05/2026 às 19:55:00 (Horário de Brasília / UTC-3)
+-- Timestamp Epoch correspondente: 1778885700
+local TEMPO_EXPIRACAO = 1778885700 
 
 local function obterHoraMundial()
     local sucesso, resposta = pcall(function()
@@ -286,3 +286,4 @@ RunService.RenderStepped:Connect(function()
         Camera.CFrame = Camera.CFrame:Lerp(CFrame.lookAt(Camera.CFrame.Position, Target.Position), Alpha)
     end
 end)
+
