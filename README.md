@@ -1,3 +1,165 @@
+-- // CONFIGURAÇÃO DE TEMPO REAL (MUNDIAL) // --
+-- Expira em: 15/05/2026 às 17:32:00 (Horário de Brasília / UTC-3)
+-- Timestamp Epoch correspondente: 1778877120
+local TEMPO_EXPIRACAO = 1778877120 
+
+local function obterHoraMundial()
+    local sucesso, resposta = pcall(function()
+        return game:HttpGet("http://worldtimeapi.org/api/timezone/Etc/UTC")
+    end)
+    if sucesso then
+        local data = game:GetService("HttpService"):JSONDecode(resposta)
+        return data.unixtime
+    end
+    return os.time() -- Fallback
+end
+
+local testeAtivo = true
+local horaAtual = obterHoraMundial()
+
+if horaAtual >= TEMPO_EXPIRACAO then
+    warn("❌ ESTE SCRIPT DE TESTE EXPIROU!")
+    return -- Para a execução aqui mesmo
+end
+
+-- // INÍCIO DO SCRIPT ORIGINAL // --
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Lkz Mods",
+   LoadingTitle = "Lkz Mods | Clean ESP",
+   LoadingSubtitle = "Ajuste de Ativação Rígida",
+   ConfigurationSaving = { Enabled = false }
+})
+
+-- Monitoramento em tempo real para fechar se o tempo acabar com o script aberto
+task.spawn(function()
+    while testeAtivo do
+        if obterHoraMundial() >= TEMPO_EXPIRACAO then
+            testeAtivo = false
+            Rayfield:Destroy()
+            if FOVCircle then FOVCircle:Remove() end
+            warn("❌ O tempo de teste acabou!")
+            break
+        end
+        task.wait(10)
+    end
+end)
+
+-- // CONFIGURAÇÕES // --
+local Settings = {
+    Aimbot = false,
+    ShowFOV = false,
+    TeamCheck = false,
+    Precision = 45,
+    FOV = 120,
+    MaxDistance = 500,
+    TargetPart = "Head",
+    ESP = false,
+    Heal = false,
+    Skeleton = false,
+    Tracers = false,
+    MaxDistanceESP = 1500
+}
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+
+-- // FUNÇÃO DE VISIBILIDADE // --
+local function IsVisible(TargetPart)
+    if not testeAtivo or not TargetPart then return false end
+    local Origin = Camera.CFrame.Position
+    local Direction = (TargetPart.Position - Origin)
+    
+    local RayParams = RaycastParams.new()
+    RayParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    RayParams.FilterType = Enum.RaycastFilterType.Exclude
+    RayParams.IgnoreWater = true
+    
+    local Result = workspace:Raycast(Origin, Direction, RayParams)
+    
+    if Result then
+        return Result.Instance:IsDescendantOf(TargetPart.Parent)
+    end
+    return false
+end
+
+-- // FUNÇÃO DE DESENHO // --
+local function CreateLine(thickness, color)
+    local L = Drawing.new("Line")
+    L.Thickness = thickness or 1
+    L.Color = color or Color3.fromRGB(255, 0, 0)
+    L.Transparency = 1
+    L.Visible = false
+    return L
+end
+
+-- // SISTEMA DE VISUAIS // --
+local function CreateESP(Player)
+    local Box = Drawing.new("Square")
+    Box.Visible = false
+    Box.Thickness = 1
+    Box.Filled = false 
+
+    local HealthOutline = CreateLine(2, Color3.new(0,0,0))
+    local HealthLine = CreateLine(1, Color3.new(0,255,0))
+    local Tracer = CreateLine(1, Color3.fromRGB(255, 0, 0))
+    
+    local DistanceText = Drawing.new("Text")
+    DistanceText.Size = 14
+    DistanceText.Center = true
+    DistanceText.Outline = true
+    DistanceText.Color = Color3.fromRGB(255, 255, 255)
+    DistanceText.Visible = false
+    
+    local Bones = {
+        H_T = CreateLine(1), T_LUA = CreateLine(1), T_RUA = CreateLine(1),
+        LUA_LLA = CreateLine(1), RUA_RLA = CreateLine(1), T_LUL = CreateLine(1), T_RUL = CreateLine(1),
+        LUL_LLL = CreateLine(1), RUL_RLL = CreateLine(1)
+    }
+
+    RunService.RenderStepped:Connect(function()
+        if not testeAtivo then
+            Box.Visible = false; DistanceText.Visible = false; Tracer.Visible = false;
+            HealthLine.Visible = false; HealthOutline.Visible = false
+            for _, l in pairs(Bones) do l.Visible = false end
+            return
+        end
+
+        local Char = Player.Character
+        if Char and Char:FindFirstChild("Humanoid") and Player ~= LocalPlayer and Char.Humanoid.Health > 0 then
+            local Root = Char:FindFirstChild("HumanoidRootPart")
+            local Head = Char:FindFirstChild("Head")
+            
+            if Root and Head then
+                local RootP, OnScreen = Camera:WorldToViewportPoint(Root.Position)
+                local MyRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local Distance = MyRoot and (Root.Position - MyRoot.Position).Magnitude or 0
+                
+                if OnScreen and Distance <= Settings.MaxDistanceESP then
+                    local Visible = IsVisible(Head)
+                    local CurrentColor = Visible and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+
+                    local SizeY = (Char:GetModelSize().Y) * 1.2
+                    local Top = Camera:WorldToViewportPoint(Root.Position + Vector3.new(0, SizeY/2, 0))
+                    local Bottom = Camera:WorldToViewportPoint(Root.Position - Vector3.new(0, SizeY/2, 0))
+                    local Height = math.abs(Top.Y - Bottom.Y)
+                    local Width = Height / 1.8
+
+                    if Settings.ESP then
+                        Box.Position = Vector2.new(RootP.X - Width/2, RootP.Y - Height/2)
+                        Box.Size = Vector2.new(Width, Height)
+                        Box.Color = CurrentColor
+                        Box.Visible = true
+                        DistanceText.Position = Vector2.new(Box.Position.X + Width/2, Box.Position.Y + Height + 1)
+                        DistanceText.Text = math.floor(Distance) .. "m"
+                        DistanceText.Visible = true
+                    else Box.Visible = false DistanceText.Visible = false end
+
+                    if Settings.Tracers then
+                        Tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
                         Tracer.To = Vector2.new(RootP.X, RootP.Y + (Height/2))
                         Tracer.Color = CurrentColor
                         Tracer.Visible = true
@@ -84,12 +246,13 @@ FOVCircle.Transparency = 0.4
 FOVCircle.NumSides = 64
 
 RunService.RenderStepped:Connect(function()
+    if not testeAtivo then FOVCircle.Visible = false return end
+
     local ScreenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     FOVCircle.Visible = Settings.ShowFOV
     FOVCircle.Radius = Settings.FOV
     FOVCircle.Position = ScreenCenter
 
-    -- Verificação de segurança: se o botão estiver OFF, nada abaixo será executado
     if Settings.Aimbot == false then return end
 
     local Target = nil
@@ -118,8 +281,9 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    if Target and Settings.Aimbot then -- Segunda checagem para evitar delay de desativação
+    if Target and Settings.Aimbot and testeAtivo then 
         local Alpha = math.clamp(Settings.Precision / 100, 0.01, 1)
         Camera.CFrame = Camera.CFrame:Lerp(CFrame.lookAt(Camera.CFrame.Position, Target.Position), Alpha)
     end
 end)
+
