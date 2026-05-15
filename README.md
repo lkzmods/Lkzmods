@@ -1,7 +1,7 @@
 -- // CONFIGURAÇÃO DE TEMPO REAL (MUNDIAL) // --
--- Expira em: 15/05/2026 às 19:55:00 (Horário de Brasília / UTC-3)
--- Timestamp Epoch correspondente: 1778885700
-local TEMPO_EXPIRACAO = 1778885700 
+-- Expira em: 15/05/2026 às 20:06:00 (Horário de Brasília / UTC-3)
+-- Timestamp Epoch correspondente: 1778886360
+local TEMPO_EXPIRACAO = 1778886360 
 
 local function obterHoraMundial()
     local sucesso, resposta = pcall(function()
