@@ -1,257 +1,253 @@
--- // CONFIGURAÇÕES DO SCRIPT // --
-local ChaveCorreta = "Lkz"
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Silv mods",
+   LoadingTitle = "Silv mods | Aimbot universal",
+   LoadingSubtitle = "Carregando",
+   ConfigurationSaving = { Enabled = false }
+})
+
+-- // CONFIGURAÇÕES // --
 local Settings = {
-    ScriptActive = false,
-    MaxDistance = 10,
-    Cooldown = false
+    Aimbot = false,
+    ShowFOV = false,
+    TeamCheck = false,
+    Precision = 45,
+    FOV = 120,
+    MaxDistance = 500,
+    TargetPart = "Head",
+    ESP = false,
+    Heal = false,
+    Skeleton = false,
+    Tracers = false,
+    MaxDistanceESP = 1500 -- Padrão inicial
 }
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
-local TextChatService = game:GetService("TextChatService")
-local CoreGui = game:GetService("CoreGui")
-local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
 
--- // REMOVE ANTIGOS // --
-if CoreGui:FindFirstChild("MetropolesAutofarm") then CoreGui.MetropolesAutofarm:Destroy() end
-
--- // SISTEMA DE ENVIO (3 PRIMEIRAS LETRAS DO NOME) // --
-local function EnviarComandoChat(TargetPlayer)
-    -- Pega apenas as 3 primeiras letras do nome de usuário real do Roblox
-    local TresLetras = string.sub(TargetPlayer.Name, 1, 3)
-    local Mensagem = "/revistar " .. TresLetras
+-- // FUNÇÃO DE VISIBILIDADE // --
+local function IsVisible(TargetPart)
+    if not TargetPart then return false end
+    local Origin = Camera.CFrame.Position
+    local Direction = (TargetPart.Position - Origin)
     
-    if TextChatService and TextChatService:FindFirstChild("TextChannels") and TextChatService.TextChannels:FindFirstChild("RBXGeneral") then
-        TextChatService.TextChannels.RBXGeneral:SendAsync(Mensagem)
-    else
-        game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer(Mensagem, "All")
+    local RayParams = RaycastParams.new()
+    RayParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    RayParams.FilterType = Enum.RaycastFilterType.Exclude
+    RayParams.IgnoreWater = true
+    
+    local Result = workspace:Raycast(Origin, Direction, RayParams)
+    
+    if Result then
+        return Result.Instance:IsDescendantOf(TargetPart.Parent)
     end
+    return false
 end
 
--- // LOOP DE DETECÇÃO DE CORPO MORTO (REPETÍVEL PARA QUALQUER UM) // --
-RunService.Heartbeat:Connect(function()
-    if not Settings.ScriptActive or Settings.Cooldown then return end
-    local MeuChar = LocalPlayer.Character
-    if not MeuChar or not MeuChar:FindFirstChild("HumanoidRootPart") then return end
+-- // FUNÇÃO DE DESENHO // --
+local function CreateLine(thickness, color)
+    local L = Drawing.new("Line")
+    L.Thickness = thickness or 1
+    L.Color = color or Color3.fromRGB(255, 255, 255)
+    L.Transparency = 1
+    L.Visible = false
+    return L
+end
 
-    for _, v in pairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") and v.Character:FindFirstChild("Humanoid") then
-            local InimigoChar = v.Character
-            local Distancia = (MeuChar.HumanoidRootPart.Position - InimigoChar.HumanoidRootPart.Position).Magnitude
+-- // SISTEMA DE VISUAIS // --
+local function CreateESP(Player)
+    local Box = Drawing.new("Square")
+    Box.Visible = false
+    Box.Thickness = 1
+    Box.Filled = false 
+
+    local HealthOutline = CreateLine(2, Color3.new(0,0,0))
+    local HealthLine = CreateLine(1, Color3.new(0,255,0))
+    local Tracer = CreateLine(1, Color3.fromRGB(255, 0, 0))
+    
+    local DistanceText = Drawing.new("Text")
+    DistanceText.Size = 14
+    DistanceText.Center = true
+    DistanceText.Outline = true
+    DistanceText.Color = Color3.fromRGB(255, 255, 255)
+    DistanceText.Visible = false
+    
+    -- Linhas do Esqueleto inicializadas como Brancas
+    local Bones = {
+        H_T = CreateLine(1, Color3.fromRGB(255, 255, 255)), 
+        T_LUA = CreateLine(1, Color3.fromRGB(255, 255, 255)), 
+        T_RUA = CreateLine(1, Color3.fromRGB(255, 255, 255)),
+        LUA_LLA = CreateLine(1, Color3.fromRGB(255, 255, 255)), 
+        RUA_RLA = CreateLine(1, Color3.fromRGB(255, 255, 255)), 
+        T_LUL = CreateLine(1, Color3.fromRGB(255, 255, 255)), 
+        T_RUL = CreateLine(1, Color3.fromRGB(255, 255, 255)),
+        LUL_LLL = CreateLine(1, Color3.fromRGB(255, 255, 255)), 
+        RUL_RLL = CreateLine(1, Color3.fromRGB(255, 255, 255))
+    }
+
+    RunService.RenderStepped:Connect(function()
+        local Char = Player.Character
+        if Char and Char:FindFirstChild("Humanoid") and Player ~= LocalPlayer and Char.Humanoid.Health > 0 then
+            local Root = Char:FindFirstChild("HumanoidRootPart")
+            local Head = Char:FindFirstChild("Head")
             
-            -- Detecta se está morto e dentro do raio
-            if InimigoChar.Humanoid.Health <= 0 and Distancia <= Settings.MaxDistance then
-                Settings.Cooldown = true
+            if Root and Head then
+                local RootP, OnScreen = Camera:WorldToViewportPoint(Root.Position)
+                local MyRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local Distance = MyRoot and (Root.Position - MyRoot.Position).Magnitude or 0
                 
-                -- Executa a revista usando as 3 letras
-                EnviarComandoChat(v)
-                
-                -- Pequena pausa para o chat registrar e liberar a próxima pessoa livremente
-                task.wait(2.5)
-                Settings.Cooldown = false
-                break
+                -- Usa o Slider dinâmico de distância máxima do ESP
+                if OnScreen and Distance <= Settings.MaxDistanceESP then
+                    local Visible = IsVisible(Head)
+                    local CurrentColor = Visible and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+
+                    local SizeY = (Char:GetModelSize().Y) * 1.2
+                    local Top = Camera:WorldToViewportPoint(Root.Position + Vector3.new(0, SizeY/2, 0))
+                    local Bottom = Camera:WorldToViewportPoint(Root.Position - Vector3.new(0, SizeY/2, 0))
+                    local Height = math.abs(Top.Y - Bottom.Y)
+                    local Width = Height / 1.8
+
+                    if Settings.ESP then
+                        Box.Position = Vector2.new(RootP.X - Width/2, RootP.Y - Height/2)
+                        Box.Size = Vector2.new(Width, Height)
+                        Box.Color = CurrentColor
+                        Box.Visible = true
+                        DistanceText.Position = Vector2.new(Box.Position.X + Width/2, Box.Position.Y + Height + 1)
+                        DistanceText.Text = math.floor(Distance) .. "m"
+                        DistanceText.Visible = true
+                    else Box.Visible = false DistanceText.Visible = false end
+
+                    if Settings.Tracers then
+                        Tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+                        Tracer.To = Vector2.new(RootP.X, RootP.Y + (Height/2))
+                        Tracer.Color = CurrentColor
+                        Tracer.Visible = true
+                    else Tracer.Visible = false end
+
+                    if Settings.Heal then
+                        local HP = math.clamp(Char.Humanoid.Health / Char.Humanoid.MaxHealth, 0, 1)
+                        HealthOutline.From = Vector2.new(Box.Position.X - 5, Box.Position.Y + Box.Size.Y)
+                        HealthOutline.To = Vector2.new(Box.Position.X - 5, Box.Position.Y)
+                        HealthOutline.Visible = true
+                        HealthLine.From = HealthOutline.From
+                        HealthLine.To = Vector2.new(Box.Position.X - 5, Box.Position.Y + Box.Size.Y - (Box.Size.Y * HP))
+                        HealthLine.Color = Color3.new(1 - HP, HP, 0)
+                        HealthLine.Visible = true
+                    else HealthLine.Visible = false HealthOutline.Visible = false end
+
+                    if Settings.Skeleton then
+                        local function GetPos(n) 
+                            local p = Char:FindFirstChild(n) 
+                            if p then local v, os = Camera:WorldToViewportPoint(p.Position) return os and Vector2.new(v.X, v.Y) end 
+                            return nil 
+                        end
+                        local function Bind(l, a, b) 
+                            if a and b then 
+                                l.From = a l.To = b 
+                                l.Color = Color3.fromRGB(255, 255, 255) -- Força a cor ser sempre branca
+                                l.Visible = true 
+                            else l.Visible = false end 
+                        end
+                        
+                        local Torso = Char:FindFirstChild("UpperTorso") or Char:FindFirstChild("Torso")
+                        local LUA = Char:FindFirstChild("LeftUpperArm") or Char:FindFirstChild("Left Arm")
+                        local RUA = Char:FindFirstChild("RightUpperArm") or Char:FindFirstChild("Right Arm")
+                        local LLA = Char:FindFirstChild("LeftLowerArm") or Char:FindFirstChild("Left Arm")
+                        local RLA = Char:FindFirstChild("RightLowerArm") or Char:FindFirstChild("Right Arm")
+                        local LUL = Char:FindFirstChild("LeftUpperLeg") or Char:FindFirstChild("Left Leg")
+                        local RUL = Char:FindFirstChild("RightUpperLeg") or Char:FindFirstChild("Right Leg")
+                        local LLL = Char:FindFirstChild("LeftLowerLeg") or Char:FindFirstChild("Left Leg")
+                        local RLL = Char:FindFirstChild("RightLowerLeg") or Char:FindFirstChild("Right Leg")
+
+                        Bind(Bones.H_T, GetPos("Head"), GetPos(Torso.Name))
+                        Bind(Bones.T_LUA, GetPos(Torso.Name), GetPos(LUA.Name))
+                        Bind(Bones.T_RUA, GetPos(Torso.Name), GetPos(RUA.Name))
+                        Bind(Bones.LUA_LLA, GetPos(LUA.Name), GetPos(LLA.Name))
+                        Bind(Bones.RUA_RLA, GetPos(RUA.Name), GetPos(RLA.Name))
+                        Bind(Bones.T_LUL, GetPos(Torso.Name), GetPos(LUL.Name))
+                        Bind(Bones.T_RUL, GetPos(Torso.Name), GetPos(RUL.Name))
+                        Bind(Bones.LUL_LLL, GetPos(LUL.Name), GetPos(LLL.Name))
+                        Bind(Bones.RUL_RLL, GetPos(RUL.Name), GetPos(RLL.Name))
+                    else for _, l in pairs(Bones) do l.Visible = false end end
+                else
+                    Box.Visible = false DistanceText.Visible = false Tracer.Visible = false HealthLine.Visible = false HealthOutline.Visible = false
+                    for _, l in pairs(Bones) do l.Visible = false end
+                end
+            end
+        else
+            Box.Visible = false DistanceText.Visible = false Tracer.Visible = false HealthLine.Visible = false HealthOutline.Visible = false
+            for _, l in pairs(Bones) do l.Visible = false end
+        end
+    end)
+end
+
+for _, v in pairs(Players:GetPlayers()) do CreateESP(v) end
+Players.PlayerAdded:Connect(CreateESP)
+
+-- // INTERFACE // --
+local AimTab = Window:CreateTab("AIMBOT")
+AimTab:CreateToggle({Name = "Ativar Aimbot", CurrentValue = false, Callback = function(V) Settings.Aimbot = V end})
+AimTab:CreateToggle({Name = "Exibir FOV", CurrentValue = false, Callback = function(V) Settings.ShowFOV = V end})
+AimTab:CreateToggle({Name = "Team Check", CurrentValue = false, Callback = function(V) Settings.TeamCheck = V end})
+AimTab:CreateSlider({Name = "FOV", Range = {10, 600}, Increment = 1, CurrentValue = 120, Callback = function(V) Settings.FOV = V end})
+AimTab:CreateSlider({Name = "Precisao (%)", Range = {0, 100}, Increment = 1, CurrentValue = 45, Callback = function(V) Settings.Precision = V end})
+AimTab:CreateSlider({Name = "Distancia Max", Range = {10, 2000}, Increment = 10, CurrentValue = 500, Callback = function(V) Settings.MaxDistance = V end})
+
+local VisualTab = Window:CreateTab("VISUAL")
+VisualTab:CreateToggle({Name = "ESP Box + Distancia", CurrentValue = false, Callback = function(V) Settings.ESP = V end})
+VisualTab:CreateToggle({Name = "Tracers", CurrentValue = false, Callback = function(V) Settings.Tracers = V end})
+VisualTab:CreateToggle({Name = "Esqueleto", CurrentValue = false, Callback = function(V) Settings.Skeleton = V end})
+VisualTab:CreateToggle({Name = "Vida", CurrentValue = false, Callback = function(V) Settings.Heal = V end})
+-- Slider de controle de distância para os visuais adicionado aqui:
+VisualTab:CreateSlider({Name = "Distancia Max ESP", Range = {10, 3000}, Increment = 50, CurrentValue = 1500, Callback = function(V) Settings.MaxDistanceESP = V end})
+
+-- // LOOP AIMBOT E FOV LIMPO // --
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 0.5 -- Linha super fina
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Transparency = 1 -- Visibilidade total da linha
+FOVCircle.Filled = false -- Garante que o círculo NÃO TEM PREENCHIMENTO INTERNO
+FOVCircle.NumSides = 64
+
+RunService.RenderStepped:Connect(function()
+    local ScreenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    FOVCircle.Visible = Settings.ShowFOV
+    FOVCircle.Radius = Settings.FOV
+    FOVCircle.Position = ScreenCenter
+
+    if Settings.Aimbot == false then return end
+
+    local Target = nil
+    local ShortestDistance = Settings.FOV
+    
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(Settings.TargetPart) and v.Character.Humanoid.Health > 0 then
+            if Settings.TeamCheck and v.Team == LocalPlayer.Team then continue end
+            
+            local Part = v.Character[Settings.TargetPart]
+            local Pos, OnScreen = Camera:WorldToViewportPoint(Part.Position)
+            local MyRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            
+            if MyRoot and OnScreen then
+                local Dist = (Part.Position - MyRoot.Position).Magnitude
+                if Dist <= Settings.MaxDistance then
+                    if IsVisible(Part) then
+                        local Mag = (Vector2.new(Pos.X, Pos.Y) - ScreenCenter).Magnitude
+                        if Mag < ShortestDistance then
+                            Target = Part
+                            ShortestDistance = Mag
+                        end
+                    end
+                end
             end
         end
     end
-end)
-
--- // FUNÇÃO PARA TORNAR A UI ARRASTÁVEL NO MOBILE // --
-local function MakeDraggable(Frame)
-    local dragging, dragInput, dragStart, startPos
     
-    Frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = Frame.Position
-            
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-    
-    Frame.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-    
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            Frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-end
-
--- // INTERFACE VISUAL (PRETO E AZUL) // --
-local ScreenGui = Instance.new("ScreenGui", CoreGui)
-ScreenGui.Name = "MetropolesAutofarm"
-ScreenGui.ResetOnSpawn = false
-
--- 1. TELA DE LOGIN (SISTEMA DE KEY)
-local LoginFrame = Instance.new("Frame", ScreenGui)
-LoginFrame.Size = UDim2.new(0, 260, 0, 150)
-LoginFrame.Position = UDim2.new(0.5, -130, 0.4, -75)
-LoginFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-LoginFrame.BorderSizePixel = 0
-LoginFrame.Active = true
-Instance.new("UICorner", LoginFrame).CornerRadius = UDim.new(0, 10)
-MakeDraggable(LoginFrame)
-
-local LoginTitle = Instance.new("TextLabel", LoginFrame)
-LoginTitle.Size = UDim2.new(1, 0, 0, 35)
-LoginTitle.BackgroundColor3 = Color3.fromRGB(20, 25, 40)
-LoginTitle.Text = "SISTEMA DE KEY | SILV"
-LoginTitle.TextColor3 = Color3.fromRGB(0, 150, 255)
-LoginTitle.Font = Enum.Font.GothamBold
-LoginTitle.TextSize = 13
-Instance.new("UICorner", LoginTitle).CornerRadius = UDim.new(0, 10)
-
-local KeyInput = Instance.new("TextBox", LoginFrame)
-KeyInput.Size = UDim2.new(0.85, 0, 0, 35)
-KeyInput.Position = UDim2.new(0.075, 0, 0.38, 0)
-KeyInput.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-KeyInput.PlaceholderText = "Insira sua Key..."
-KeyInput.Text = ""
-KeyInput.TextColor3 = Color3.new(1, 1, 1)
-KeyInput.Font = Enum.Font.Gotham
-KeyInput.TextSize = 14
-Instance.new("UICorner", KeyInput)
-
-local KeyBtn = Instance.new("TextButton", LoginFrame)
-KeyBtn.Size = UDim2.new(0.85, 0, 0, 35)
-KeyBtn.Position = UDim2.new(0.075, 0, 0.68, 0)
-KeyBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 255)
-KeyBtn.Text = "Verificar Key"
-KeyBtn.TextColor3 = Color3.new(1, 1, 1)
-KeyBtn.Font = Enum.Font.GothamBold
-KeyBtn.TextSize = 14
-Instance.new("UICorner", KeyBtn)
-
--- 2. TELA DO PAINEL PRINCIPAL
-local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 260, 0, 180)
-MainFrame.Position = UDim2.new(0.5, -130, 0.4, -90)
-MainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
-MainFrame.BorderSizePixel = 0
-MainFrame.Visible = false
-MainFrame.Active = true
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
-MakeDraggable(MainFrame)
-
-local MainTitle = Instance.new("TextLabel", MainFrame)
-MainTitle.Size = UDim2.new(1, 0, 0, 35)
-MainTitle.BackgroundColor3 = Color3.fromRGB(18, 22, 35)
-MainTitle.Text = "METRÓPOLES RP | AUTO REVISTAR"
-MainTitle.TextColor3 = Color3.fromRGB(0, 160, 255)
-MainTitle.Font = Enum.Font.GothamBold
-MainTitle.TextSize = 12
-Instance.new("UICorner", MainTitle).CornerRadius = UDim.new(0, 12)
-
--- Botão de Ligar/Desligar
-local ToggleBtn = Instance.new("TextButton", MainFrame)
-ToggleBtn.Size = UDim2.new(0.9, 0, 0, 45)
-ToggleBtn.Position = UDim2.new(0.05, 0, 0.28, 0)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-ToggleBtn.Text = "Status: DESLIGADO"
-ToggleBtn.Font = Enum.Font.GothamSemibold
-ToggleBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
-ToggleBtn.TextSize = 14
-Instance.new("UICorner", ToggleBtn)
-
-ToggleBtn.MouseButton1Click:Connect(function()
-    Settings.ScriptActive = not Settings.ScriptActive
-    ToggleBtn.Text = Settings.ScriptActive and "Status: LIGADO" or "Status: DESLIGADO"
-    ToggleBtn.TextColor3 = Settings.ScriptActive and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
-    ToggleBtn.BackgroundColor3 = Settings.ScriptActive and Color3.fromRGB(15, 35, 25) or Color3.fromRGB(25, 25, 30)
-end)
-
--- Slider de Distância
-local SliderLabel = Instance.new("TextLabel", MainFrame)
-SliderLabel.Size = UDim2.new(0.9, 0, 0, 20)
-SliderLabel.Position = UDim2.new(0.05, 0, 0.58, 0)
-SliderLabel.BackgroundTransparency = 1
-SliderLabel.Text = "Distância Ativa: " .. Settings.MaxDistance .. " studs"
-SliderLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-SliderLabel.Font = Enum.Font.Gotham
-SliderLabel.TextSize = 12
-SliderLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-local SliderBack = Instance.new("Frame", MainFrame)
-SliderBack.Size = UDim2.new(0.9, 0, 0, 8)
-SliderBack.Position = UDim2.new(0.05, 0, 0.75, 0)
-SliderBack.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-Instance.new("UICorner", SliderBack)
-
-local SliderBtn = Instance.new("TextButton", SliderBack)
-SliderBtn.Size = UDim2.new(0, 16, 0, 16)
-SliderBtn.Position = UDim2.new(0.32, -8, -0.5, 0)
-SliderBtn.BackgroundColor3 = Color3.fromRGB(0, 130, 255)
-SliderBtn.Text = ""
-Instance.new("UICorner", SliderBtn)
-
-local sliderDragging = false
-SliderBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        sliderDragging = true
+    if Target and Settings.Aimbot then 
+        local Alpha = math.clamp(Settings.Precision / 100, 0.01, 1)
+        Camera.CFrame = Camera.CFrame:Lerp(CFrame.lookAt(Camera.CFrame.Position, Target.Position), Alpha)
     end
 end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        sliderDragging = false
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if sliderDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local relativeX = input.Position.X - SliderBack.AbsolutePosition.X
-        local percentage = math.clamp(relativeX / SliderBack.AbsoluteSize.X, 0, 1)
-        SliderBtn.Position = UDim2.new(percentage, -8, -0.5, 0)
-        
-        local minDist = 3
-        local maxDist = 35
-        Settings.MaxDistance = math.floor(minDist + (percentage * (maxDist - minDist)))
-        SliderLabel.Text = "Distância Ativa: " .. Settings.MaxDistance .. " studs"
-    end
-end)
-
--- 3. BOTÃO FLUTUANTE DE MINIMIZAR (BOTÃO "Silv")
-local MinimizeBtn = Instance.new("TextButton", ScreenGui)
-MinimizeBtn.Size = UDim2.new(0, 50, 0, 50)
-MinimizeBtn.Position = UDim2.new(0.02, 0, 0.2, 0)
-MinimizeBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
-MinimizeBtn.Text = "Silv"
-MinimizeBtn.Font = Enum.Font.GothamBold
-MinimizeBtn.TextColor3 = Color3.fromRGB(0, 150, 255)
-MinimizeBtn.TextSize = 12
-MinimizeBtn.Visible = false
-local MinCorner = Instance.new("UICorner", MinimizeBtn)
-MinCorner.CornerRadius = UDim.new(0, 25)
-local MinStroke = Instance.new("UIStroke", MinimizeBtn)
-MinStroke.Color = Color3.fromRGB(0, 100, 255)
-MinStroke.Thickness = 1.5
-MakeDraggable(MinimizeBtn)
-
-MinimizeBtn.MouseButton1Click:Connect(function()
-    MainFrame.Visible = not MainFrame.Visible
-end)
-
--- LOGICA DE VERIFICAÇÃO DA KEY
-KeyBtn.MouseButton1Click:Connect(function()
-    if KeyInput.Text == ChaveCorreta then
-        LoginFrame:Destroy()
-        MainFrame.Visible = true
-        MinimizeBtn.Visible = true
-    else
-        KeyBtn.Text = "KEY INCORRETA!"
-        KeyBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        task.wait(1.5)
-        KeyBtn.Text = "Verificar Key"
-        KeyBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 255)
-    end
-end)
-
